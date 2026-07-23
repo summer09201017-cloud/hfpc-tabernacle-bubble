@@ -1,0 +1,13 @@
+{
+  "name": "會幕・甘心奉獻",
+  "short_name": "會幕奉獻",
+  "description": "瞄準發射,把奉獻物送到同類旁邊——湊滿 3 件一起歸進會幕庫房!材料夠用而且有餘(出埃及記 35-36,和合本)",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#c09858",
+  "theme_color": "#7a5a34",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
