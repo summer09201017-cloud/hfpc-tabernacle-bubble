@@ -13,8 +13,8 @@
   const AGES = {
     // grow=每幾發從頂端游來新一排(0=不長);guide=瞄準虛線長度(青檔更短,要自己抓角度)
     young: { label: '🐣 幼', desc: '3 種禮物・3 排', kinds: 3, rows: 3, cols: 8, grow: 0, guide: 150 },
-    kid: { label: '🙂 童', desc: '4 種禮物・4 排', kinds: 4, rows: 4, cols: 9, grow: 9, guide: 130 },
-    teen: { label: '🔥 青', desc: '5 種・禮物越拿越多', kinds: 5, rows: 5, cols: 10, grow: 6, guide: 70 },
+    kid: { label: '🙂 童', desc: '4 種禮物・4 排', kinds: 4, rows: 4, cols: 9, grow: 11, maxGrow: 8, guide: 130 },
+    teen: { label: '🔥 青', desc: '5 種・禮物越拿越多', kinds: 5, rows: 5, cols: 10, grow: 8, maxGrow: 12, guide: 70 },
   }
 
   const KINDS = ['gold', 'blue', 'purple', 'scarlet', 'wood']
@@ -35,6 +35,7 @@
     float: '受感的心,主都收下…',
     more: '又有百姓拿禮物來了…',
     low: '摩西吩咐先把下層收進庫房…',
+    growStop: '摩西傳命:不必再拿禮物來——夠用了!(出 36:6)',
     closeLine: '因為他們所有的材料夠做一切當做的物，而且有餘。(出 36:7)',
     winTitle: '🎉 夠用,而且有餘!',
     winVerse: '因為他們所有的材料夠做一切當做的物，而且有餘。',
@@ -144,6 +145,7 @@
       this.cur = this._pick()
       this.next = this._pick()
       this.aim = -Math.PI / 2
+      this.growCount = 0; this.growStopped = false; this.startGT = this._t
       this.state = 'play'
       this.startT = performance.now()
       this._voice('intro')
@@ -177,6 +179,12 @@
 
     _growRow() {
       if (this.state !== 'play' || this.grid.size === 0) return
+      // 「夠用就攔住」(出 36:6 摩西傳命攔住百姓——加壓停止=聖經劇情本身;07-23 平衡修)
+      if ((this.growCount || 0) >= (this.cfg.maxGrow || 99) || this.grid.size <= 8 || (this._t - (this.startGT || 0)) > 180) {
+        if (!this.growStopped) { this.growStopped = true; this.toasts.push({ text: T.growStop, t: this._t }) }
+        return
+      }
+      this.growCount = (this.growCount || 0) + 1
       const shifted = new Map()
       for (const [key, kind] of this.grid) {
         const [r, c] = key.split(',').map(Number)
