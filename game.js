@@ -648,24 +648,34 @@
       ctx.save()
       ctx.translate(x, y)
       const face = (fy = 0) => {
-        const er = r * 0.11
-        ctx.fillStyle = '#fff'
-        ctx.beginPath(); ctx.arc(-r * 0.24, fy - r * 0.1, er * 1.5, 0, 7); ctx.fill()
-        ctx.beginPath(); ctx.arc(r * 0.24, fy - r * 0.1, er * 1.5, 0, 7); ctx.fill()
-        ctx.fillStyle = '#2c2416'
-        ctx.beginPath(); ctx.arc(-r * 0.22, fy - r * 0.08, er, 0, 7); ctx.fill()
-        ctx.beginPath(); ctx.arc(r * 0.26, fy - r * 0.08, er, 0, 7); ctx.fill()
-        ctx.fillStyle = '#fff' // 水潤雙高光
-        ctx.beginPath(); ctx.arc(-r * 0.26, fy - r * 0.13, er * 0.42, 0, 7); ctx.fill()
-        ctx.beginPath(); ctx.arc(r * 0.22, fy - r * 0.13, er * 0.42, 0, 7); ctx.fill()
-        ctx.fillStyle = 'rgba(255,255,255,0.7)'
-        ctx.beginPath(); ctx.arc(-r * 0.18, fy - r * 0.03, er * 0.2, 0, 7); ctx.fill()
-        ctx.beginPath(); ctx.arc(r * 0.3, fy - r * 0.03, er * 0.2, 0, 7); ctx.fill()
+        // ★ 07-24 v3:大眼睛+眨眼(依位置錯開)+加深微笑
+        const er = r * 0.15
+        const blink = ((performance.now() / 1000 + x * 7.13 + y * 3.71) % 4.6) < 0.12
+        if (blink) {
+          ctx.strokeStyle = '#2c2416'; ctx.lineWidth = Math.max(1.6, r * 0.07); ctx.lineCap = 'round'
+          ctx.beginPath(); ctx.moveTo(-r * 0.36, fy - r * 0.08); ctx.lineTo(-r * 0.1, fy - r * 0.08); ctx.stroke()
+          ctx.beginPath(); ctx.moveTo(r * 0.14, fy - r * 0.08); ctx.lineTo(r * 0.4, fy - r * 0.08); ctx.stroke()
+          ctx.lineCap = 'butt'
+        } else {
+          ctx.fillStyle = '#fff'
+          ctx.beginPath(); ctx.arc(-r * 0.24, fy - r * 0.1, er * 1.45, 0, 7); ctx.fill()
+          ctx.beginPath(); ctx.arc(r * 0.24, fy - r * 0.1, er * 1.45, 0, 7); ctx.fill()
+          ctx.fillStyle = '#2c2416'
+          ctx.beginPath(); ctx.arc(-r * 0.22, fy - r * 0.08, er, 0, 7); ctx.fill()
+          ctx.beginPath(); ctx.arc(r * 0.26, fy - r * 0.08, er, 0, 7); ctx.fill()
+          ctx.fillStyle = '#fff'
+          ctx.beginPath(); ctx.arc(-r * 0.27, fy - r * 0.14, er * 0.42, 0, 7); ctx.fill()
+          ctx.beginPath(); ctx.arc(r * 0.21, fy - r * 0.14, er * 0.42, 0, 7); ctx.fill()
+          ctx.fillStyle = 'rgba(255,255,255,0.7)'
+          ctx.beginPath(); ctx.arc(-r * 0.17, fy - r * 0.02, er * 0.2, 0, 7); ctx.fill()
+          ctx.beginPath(); ctx.arc(r * 0.31, fy - r * 0.02, er * 0.2, 0, 7); ctx.fill()
+        }
         ctx.fillStyle = 'rgba(240,120,120,0.4)'
-        ctx.beginPath(); ctx.arc(-r * 0.42, fy + r * 0.14, er * 1.1, 0, 7); ctx.fill()
-        ctx.beginPath(); ctx.arc(r * 0.42, fy + r * 0.14, er * 1.1, 0, 7); ctx.fill()
-        ctx.strokeStyle = '#4a3420'; ctx.lineWidth = Math.max(1.2, r * 0.05)
-        ctx.beginPath(); ctx.arc(0, fy + r * 0.1, r * 0.14, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke()
+        ctx.beginPath(); ctx.arc(-r * 0.44, fy + r * 0.16, er * 1.15, 0, 7); ctx.fill()
+        ctx.beginPath(); ctx.arc(r * 0.44, fy + r * 0.16, er * 1.15, 0, 7); ctx.fill()
+        ctx.strokeStyle = '#4a3420'; ctx.lineWidth = Math.max(1.6, r * 0.065); ctx.lineCap = 'round' // v3 加深微笑
+        ctx.beginPath(); ctx.arc(0, fy + r * 0.06, r * 0.2, 0.18 * Math.PI, 0.82 * Math.PI); ctx.stroke()
+        ctx.lineCap = 'butt'
       }
       const ball = (col, line) => { // ★ 07-24 立體化:徑向漸層+頂光弧
         const grd = ctx.createRadialGradient(-r * 0.3, -r * 0.34, r * 0.08, 0, 0, r * 0.95)
