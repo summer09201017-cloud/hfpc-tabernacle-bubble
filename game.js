@@ -24,6 +24,14 @@
   const ROWSTEP = D * 0.87
   const MAXROW = 8 // 堆到這排=主親自收進網(溫柔收回,不是輸)
 
+  // 關卡制(bubble 版:無衝刺——與「夠用就攔住」加壓批次語意衝突;難度=起始排+波次上限隨關數升)
+  const LS = 'tabernacle-bubble'
+  const isSprint = () => false
+  const maxLevel = (age) => { try { return Math.max(1, parseInt(localStorage.getItem(`${LS}-lvl-${age}`)) || 1) } catch { return 1 } }
+  const bumpLevel = (age, lv) => { try { localStorage.setItem(`${LS}-lvl-${age}`, String(Math.max(maxLevel(age), lv))) } catch {} }
+  const loadStars = (age) => { try { return JSON.parse(localStorage.getItem(`${LS}-stars-${age}`) || '{}') || {} } catch { return {} } }
+  const saveStars = (age, st) => { try { localStorage.setItem(`${LS}-stars-${age}`, JSON.stringify(st)) } catch {} }
+
   const T = {
     title: '⛺ 會幕・甘心奉獻',
     ref: '出埃及記 35:5,21',
@@ -43,7 +51,9 @@
     teachVerse: '凡心裡受感和甘心樂意的都拿耶和華的禮物來，用以做會幕和其中一切的使用，又用以做聖衣。',
     teachRef: '出埃及記 35:21',
     teach: '會幕不是靠攤派蓋起來的——是「凡心裡受感和甘心樂意的」把禮物拿來,拿到摩西要出令攔住(出 36:6)。神愛甘心樂意的奉獻:金環是你的、線是你織的、木是你扛的,祂都收進祂的工,而且永遠夠用有餘。',
-    review: '文案待牧者審核・經文均經和合本逐句核對',
+    mapTitle: '🗺 關卡地圖',
+    mapHint: '點亮過的關可重玩拿星星・越後面魚群越多',
+    review: '經文均經和合本逐句核對・牧者已審核',
   }
 
   const VOICES = { intro: 'voice/intro.mp3', bless: 'voice/bless.mp3', win: 'voice/win.mp3' }
@@ -60,6 +70,10 @@
       this._btns = []
       this._winBtns = []
       this._onKeyDown = (e) => this._key(e)
+      this.level = 1
+      this.stars = {}
+      this.lastStars = 1
+      this._mapBtns = []
       this._onDown = (e) => this._down(e)
       this._onMove = (e) => this._movePt(e)
       this._onUp = (e) => this._up(e)
@@ -128,12 +142,16 @@
       try { if (typeof window.__ping === 'function') window.__ping('tabernacle-bubble' + suffix, t) } catch {}
     }
 
-    _start(age) {
+    _start(age, forceLv) {
       this.age = age
       this.cfg = AGES[age]
+      this.level = forceLv || maxLevel(age)
+      this.stars = loadStars(age)
+      this.lvRows = Math.min(6, this.cfg.rows + Math.floor((this.level - 1) / 2))
+      this.lvMaxGrow = (this.cfg.maxGrow || 0) ? this.cfg.maxGrow + Math.min(8, (this.level - 1) * 2) : 0
       this.grid = new Map()
       const kinds = KINDS.slice(0, this.cfg.kinds)
-      for (let r = 0; r < this.cfg.rows; r++)
+      for (let r = 0; r < this.lvRows; r++)
         for (let c = 0; c < this.cfg.cols - (r % 2); c++)
           this.grid.set(`${r},${c}`, kinds[Math.floor(Math.random() * kinds.length)])
       this.arkCount = 0
@@ -180,7 +198,7 @@
     _growRow() {
       if (this.state !== 'play' || this.grid.size === 0) return
       // 「夠用就攔住」(出 36:6 摩西傳命攔住百姓——加壓停止=聖經劇情本身;07-23 平衡修)
-      if ((this.growCount || 0) >= (this.cfg.maxGrow || 99) || this.grid.size <= 8 || (this._t - (this.startGT || 0)) > 180) {
+      if ((this.growCount || 0) >= ((this.lvMaxGrow || this.cfg.maxGrow) || 99) || this.grid.size <= 8 || (this._t - (this.startGT || 0)) > 180) {
         if (!this.growStopped) { this.growStopped = true; this.toasts.push({ text: T.growStop, t: this._t }) }
         return
       }
@@ -328,6 +346,14 @@
 
     _win() {
       this.state = 'win'
+      const secsSt = Math.max(1, (performance.now() - this.startT) / 1000)
+      const per = secsSt / Math.max(1, this.arkCount)
+      this.lastStars = per <= 2.2 ? 3 : per <= 3.5 ? 2 : 1
+      if ((this.stars[this.level] | 0) < this.lastStars) {
+        this.stars[this.level] = this.lastStars
+        saveStars(this.age, this.stars)
+      }
+      bumpLevel(this.age, this.level + 1)
       this._tone(523, 0.15); this._tone(659, 0.15, 0.14); this._tone(784, 0.3, 0.28)
       this._voice('win')
       this._ping('-done', Math.max(1, Math.round((performance.now() - this.startT) / 1000)))
@@ -347,11 +373,12 @@
 
     _key(e) {
       if (this.state === 'intro') {
-        if (e.key === '1') return this._start('young')
-        if (e.key === '2' || e.key === 'Enter') return this._start('kid')
-        if (e.key === '3') return this._start('teen')
+        if (e.key === '1') { this.age = 'young'; this.state = 'map'; return }
+        if (e.key === '2' || e.key === 'Enter') { this.age = 'kid'; this.state = 'map'; return }
+        if (e.key === '3') { this.age = 'teen'; this.state = 'map'; return }
         return
       }
+      if (this.state === 'map' && e.key === 'Enter') return this._start(this.age, maxLevel(this.age))
       if (this.state !== 'play') return
       if (e.key === 'ArrowLeft' || e.key === 'a') this.aim = Math.max(-Math.PI + 0.3, this.aim - 0.09)
       else if (e.key === 'ArrowRight' || e.key === 'd') this.aim = Math.min(-0.3, this.aim + 0.09)
@@ -379,7 +406,16 @@
         return
       }
       if (this.state === 'intro') {
-        for (const b of this._btns) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return this._start(b.key)
+        for (const b of this._btns) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { this.age = b.key; this.state = 'map'; return }
+        return
+      }
+      if (this.state === 'map') {
+        for (const b of this._mapBtns) {
+          if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+            if (b.lv === 0) { this.state = 'intro'; return }
+            return this._start(this.age, b.lv)
+          }
+        }
         return
       }
       if (this.state === 'win') {
@@ -388,8 +424,10 @@
         const ry = ((e.clientY - r0.top) / r0.height) * this.H
         for (const b of this._winBtns || []) {
           if (rx >= b.x && rx <= b.x + b.w && ry >= b.y && ry <= b.y + b.h) {
-            if (b.action === 'replay') return this._start(this.age)
-            this.state = 'intro'; this.confetti = []
+            if (b.action === 'next') return this._start(this.age, this.level + 1)
+            if (b.action === 'replay') return this._start(this.age, this.level)
+            if (b.action === 'lobby') { try { location.href = 'https://hfpc-bible-games.summer09201017.workers.dev/' } catch {} return }
+            this.state = 'map'; this.confetti = [] // 🗺 關卡地圖
             return
           }
         }
@@ -457,6 +495,7 @@
         ctx.stroke()
       }
       if (this.state === 'intro') { this._drawIntro(); this._fsBtn(); ctx.restore(); return }
+      if (this.state === 'map') { this._drawMap(); this._fsBtn(); ctx.restore(); return }
       // 船+網(右側)
       this._net(this.state === 'close' || this.state === 'win')
       // 網格魚群
@@ -509,7 +548,7 @@
       ctx.fillStyle = '#eaf2f8'
       ctx.font = 'bold 15px "Noto Sans TC","Microsoft JhengHei",sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(`${T.hud(this.grid.size, this.arkCount)} ・ ←→瞄準 空白鍵發射`, VW / 2, 29)
+      ctx.fillText(`第 ${this.level} 關 ${T.hud(this.grid.size, this.arkCount)} ・ ←→瞄準 空白鍵發射`, VW / 2, 29)
       this._fsBtn()
       for (const c of this.confetti) {
         ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot)
@@ -580,17 +619,31 @@
         ctx.fillStyle = '#2c2416'
         ctx.beginPath(); ctx.arc(-r * 0.22, fy - r * 0.08, er, 0, 7); ctx.fill()
         ctx.beginPath(); ctx.arc(r * 0.26, fy - r * 0.08, er, 0, 7); ctx.fill()
+        ctx.fillStyle = '#fff' // 水潤雙高光
+        ctx.beginPath(); ctx.arc(-r * 0.26, fy - r * 0.13, er * 0.42, 0, 7); ctx.fill()
+        ctx.beginPath(); ctx.arc(r * 0.22, fy - r * 0.13, er * 0.42, 0, 7); ctx.fill()
+        ctx.fillStyle = 'rgba(255,255,255,0.7)'
+        ctx.beginPath(); ctx.arc(-r * 0.18, fy - r * 0.03, er * 0.2, 0, 7); ctx.fill()
+        ctx.beginPath(); ctx.arc(r * 0.3, fy - r * 0.03, er * 0.2, 0, 7); ctx.fill()
         ctx.fillStyle = 'rgba(240,120,120,0.4)'
         ctx.beginPath(); ctx.arc(-r * 0.42, fy + r * 0.14, er * 1.1, 0, 7); ctx.fill()
         ctx.beginPath(); ctx.arc(r * 0.42, fy + r * 0.14, er * 1.1, 0, 7); ctx.fill()
         ctx.strokeStyle = '#4a3420'; ctx.lineWidth = Math.max(1.2, r * 0.05)
         ctx.beginPath(); ctx.arc(0, fy + r * 0.1, r * 0.14, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke()
       }
-      const ball = (col, line) => {
-        ctx.fillStyle = col
+      const ball = (col, line) => { // ★ 07-24 立體化:徑向漸層+頂光弧
+        const grd = ctx.createRadialGradient(-r * 0.3, -r * 0.34, r * 0.08, 0, 0, r * 0.95)
+        grd.addColorStop(0, tint(col, 0.45))
+        grd.addColorStop(0.55, col)
+        grd.addColorStop(1, shadeHex(col, 0.22))
+        ctx.fillStyle = grd
         ctx.beginPath(); ctx.arc(0, 0, r * 0.85, 0, 7); ctx.fill()
         ctx.strokeStyle = line; ctx.lineWidth = Math.max(1.4, r * 0.06)
         ctx.beginPath(); ctx.arc(0, 0, r * 0.85, 0, 7); ctx.stroke()
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+        ctx.lineWidth = Math.max(1.4, r * 0.08); ctx.lineCap = 'round'
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.66, Math.PI * 1.12, Math.PI * 1.48); ctx.stroke()
+        ctx.lineCap = 'butt'
       }
       const yarn = (col, line, pattern) => { // 線團:纏線紋各款不同
         ball(col, line)
@@ -671,6 +724,68 @@
       ctx.fillText(T.review, VW / 2, VH * 0.94)
     }
 
+    // 🗺 關卡地圖(蛇行 12 節點+星星+🔒;點過的關可重玩拿星)
+    _drawMap() {
+      const { ctx } = this
+      const a = AGES[this.age] || AGES.kid
+      const maxLv = maxLevel(this.age)
+      this.stars = loadStars(this.age)
+      ctx.fillStyle = 'rgba(246,251,254,0.96)'
+      ctx.strokeStyle = '#7a9cb8'; ctx.lineWidth = 3
+      rA(ctx, VW * 0.06, VH * 0.04, VW * 0.88, VH * 0.92, 18); ctx.fill(); ctx.stroke()
+      ctx.textAlign = 'center'
+      ctx.fillStyle = '#16324a'
+      ctx.font = 'bold 26px "Noto Sans TC","Microsoft JhengHei",sans-serif'
+      ctx.fillText(T.mapTitle, VW / 2, VH * 0.13)
+      ctx.fillStyle = '#4a6a86'
+      ctx.font = '15px "Noto Sans TC","Microsoft JhengHei",sans-serif'
+      ctx.fillText(`${a.label}・已走到第 ${maxLv} 關 ・ ${T.mapHint}`, VW / 2, VH * 0.2)
+      this._mapBtns = []
+      const start = Math.max(1, maxLv - 7)
+      const COLS = 4
+      for (let i = 0; i < 12; i++) {
+        const lv = start + i, row = Math.floor(i / COLS)
+        let col = i % COLS
+        if (row % 2 === 1) col = COLS - 1 - col
+        const nx = VW * 0.2 + col * VW * 0.2, ny = VH * 0.33 + row * VH * 0.19
+        if (i > 0) {
+          const pr = Math.floor((i - 1) / COLS)
+          let pc = (i - 1) % COLS
+          if (pr % 2 === 1) pc = COLS - 1 - pc
+          ctx.strokeStyle = 'rgba(122,156,184,0.35)'; ctx.lineWidth = 8; ctx.lineCap = 'round'
+          ctx.beginPath(); ctx.moveTo(VW * 0.2 + pc * VW * 0.2, VH * 0.33 + pr * VH * 0.19); ctx.lineTo(nx, ny); ctx.stroke()
+          ctx.lineCap = 'butt'
+        }
+        const unlocked = lv <= maxLv, cur = lv === maxLv, st = this.stars[lv] | 0
+        ctx.fillStyle = !unlocked ? 'rgba(60,90,110,0.16)' : '#4a88b8'
+        ctx.beginPath(); ctx.arc(nx, ny, 30, 0, 7); ctx.fill()
+        if (cur) {
+          ctx.strokeStyle = '#e8a020'; ctx.lineWidth = 4 + 1.5 * Math.sin(this._t * 5)
+          ctx.beginPath(); ctx.arc(nx, ny, 36, 0, 7); ctx.stroke()
+        }
+        ctx.fillStyle = unlocked ? '#fff' : 'rgba(60,90,110,0.55)'
+        ctx.font = 'bold 20px "Noto Sans TC","Microsoft JhengHei",sans-serif'
+        ctx.fillText(unlocked ? String(lv) : '🔒', nx, ny + 7)
+        if (unlocked) {
+          ctx.fillStyle = '#e8a020'; ctx.font = '14px sans-serif'
+          ctx.fillText(st ? '★★★'.slice(0, st) : (cur ? '▶' : ''), nx, ny + 48)
+          this._mapBtns.push({ x: nx - 34, y: ny - 34, w: 68, h: 68, lv })
+        }
+      }
+      const bw = VW * 0.26, bh = VH * 0.09, by = VH * 0.86
+      ctx.fillStyle = '#f0d080'; ctx.strokeStyle = '#5a88a8'; ctx.lineWidth = 2
+      rA(ctx, VW / 2 - bw - 12, by, bw, bh, 12); ctx.fill(); ctx.stroke()
+      ctx.fillStyle = '#3a2c08'
+      ctx.font = 'bold 18px "Noto Sans TC","Microsoft JhengHei",sans-serif'
+      ctx.fillText(`▶ 繼續:第 ${maxLv} 關`, VW / 2 - bw / 2 - 12, by + bh * 0.64)
+      this._mapBtns.push({ x: VW / 2 - bw - 12, y: by, w: bw, h: bh, lv: maxLv })
+      ctx.fillStyle = '#8ab8d8'
+      rA(ctx, VW / 2 + 12, by, bw, bh, 12); ctx.fill(); ctx.stroke()
+      ctx.fillStyle = '#0e2436'
+      ctx.fillText('← 換年齡檔', VW / 2 + 12 + bw / 2, by + bh * 0.64)
+      this._mapBtns.push({ x: VW / 2 + 12, y: by, w: bw, h: bh, lv: 0 })
+    }
+
     _drawWinCard() {
       const { ctx, W, H } = this
       ctx.save()
@@ -683,6 +798,9 @@
       ctx.fillStyle = '#1c3a50'
       ctx.font = `bold ${Math.max(20, H * 0.055)}px "Noto Sans TC","Microsoft JhengHei",sans-serif`
       ctx.fillText(T.winTitle, W / 2, H * 0.16)
+      ctx.fillStyle = '#e8a020'
+      ctx.font = `${Math.max(18, H * 0.05)}px "Noto Sans TC","Microsoft JhengHei",sans-serif`
+      ctx.fillText('★★★'.slice(0, this.lastStars) + '☆☆☆'.slice(0, 3 - this.lastStars), W / 2, H * 0.26)
       ctx.fillStyle = '#4a6a82'
       ctx.font = `${Math.max(12, H * 0.03)}px "Noto Sans TC","Microsoft JhengHei",sans-serif`
       ctx.fillText(`庫房裡一共 ${this.arkCount} 件——夠用,而且有餘`, W / 2, H * 0.235)
@@ -693,18 +811,21 @@
       ctx.fillStyle = '#243442'
       wrapA(ctx, T.teach, W / 2, H * 0.6, W * 0.68, H * 0.04)
       this._winBtns = []
-      const bw = W * 0.22, bh = H * 0.085, by = y + h - bh - H * 0.03
+      const bw = W * 0.185, bh = H * 0.085, by = y + h - bh - H * 0.03, gap = W * 0.012
+      const x0 = W / 2 - (bw * 2 + gap * 1.5)
       const defs = [
-        { label: '🔁 再玩一次', action: 'replay', x: W / 2 - bw - W * 0.02 },
-        { label: '🐣 選難度', action: 'intro', x: W / 2 + W * 0.02 },
+        { label: '⭐ 下一關(更豐盛)', action: 'next', x: x0 },
+        { label: '🗺 關卡地圖', action: 'map', x: x0 + bw + gap },
+        { label: '🔁 再玩一次', action: 'replay', x: x0 + (bw + gap) * 2 },
+        { label: '← 回大廳', action: 'lobby', x: x0 + (bw + gap) * 3 },
       ]
       for (const d of defs) {
         ctx.fillStyle = '#8ab8d8'
         ctx.strokeStyle = '#5a88a8'; ctx.lineWidth = 2
         rA(ctx, d.x, by, bw, bh, 12); ctx.fill(); ctx.stroke()
         ctx.fillStyle = '#0e2436'
-        ctx.font = `bold ${Math.max(14, H * 0.036)}px "Noto Sans TC","Microsoft JhengHei",sans-serif`
-        ctx.fillText(d.label, d.x + bw / 2, by + bh * 0.64)
+        ctx.font = `bold ${Math.max(12, H * 0.028)}px "Noto Sans TC","Microsoft JhengHei",sans-serif`
+        ctx.fillText(d.label, d.x + bw / 2, by + bh * 0.62)
         this._winBtns.push({ x: d.x, y: by, w: bw, h: bh, action: d.action })
       }
       ctx.restore()
@@ -712,6 +833,14 @@
   }
 
   function rA(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h) }
+
+  function hexRGB(hex) {
+    const h = hex.replace('#', '')
+    const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+    return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)]
+  }
+  function tint(hex, k) { try { const [r2, g2, b2] = hexRGB(hex); return `rgb(${Math.round(r2 + (255 - r2) * k)},${Math.round(g2 + (255 - g2) * k)},${Math.round(b2 + (255 - b2) * k)})` } catch { return hex } }
+  function shadeHex(hex, k) { try { const [r2, g2, b2] = hexRGB(hex); return `rgb(${Math.round(r2 * (1 - k))},${Math.round(g2 * (1 - k))},${Math.round(b2 * (1 - k))})` } catch { return hex } }
   function cardA(ctx, x, y, w, h) {
     ctx.fillStyle = 'rgba(246,251,254,0.96)'
     ctx.strokeStyle = '#7a9cb8'; ctx.lineWidth = 3
@@ -731,11 +860,14 @@
   game.boot()
   window.__game = game
   window.__bb = {
-    start: (age) => game._start(age || 'kid'),
+    start: (age, lv) => game._start(age || 'kid', lv || 1),
+    gotoLevel: (lv) => game._start(game.age || 'kid', lv),
     state: () => ({
       state: game.state,
       remain: game.grid.size,
       net: game.arkCount,
+      level: game.level,
+      stars: game.lastStars,
     }),
   }
 })()
